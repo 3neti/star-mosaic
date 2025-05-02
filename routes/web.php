@@ -110,13 +110,87 @@ use Illuminate\Support\Str;
 //})->name('extract');
 
 
+//Route::get('extract', function () {
+//    $playlistId = '5pn8zwd2XxLLZIRyNWhdma';
+//
+//    Storage::makeDirectory('spotify/images');
+//
+//    $playlistData = Spotify::playlist($playlistId)->get();
+//    Storage::put('spotify/playlist.json', json_encode($playlistData, JSON_PRETTY_PRINT));
+//
+//    $downloadedAlbums = [];
+//    $skipped = 0;
+//    $downloaded = 0;
+//    $offset = 0;
+//    $limit = 100;
+//
+//    do {
+//        $response = Spotify::playlistTracks($playlistId)
+//            ->limit($limit)
+//            ->offset($offset)
+//            ->get();
+//
+//        foreach ($response['items'] as $i => $item) {
+//            $track = $item['track'];
+//            $album = $track['album'] ?? null;
+//            $albumName = $album['name'] ?? null;
+//            $albumId = $album['id'] ?? null;
+//            $images = $album['images'] ?? [];
+//
+//            if (!$albumName || !$albumId || !isset($images[0]['url'])) {
+//                continue;
+//            }
+//
+//            if (in_array($albumName, $downloadedAlbums)) {
+//                $skipped++;
+//                continue;
+//            }
+//
+//            $index = $offset + $i + 1;
+//            $slug = Str::slug("{$index}-{$albumName}-{$albumId}") . '.jpg';
+//            $relativePath = "spotify/images/{$slug}";
+//            $absolutePath = storage_path("app/public/{$relativePath}");
+//
+//            if (file_exists($absolutePath)) {
+//                $skipped++;
+//                continue;
+//            }
+//
+//            $imageContents = Http::get($images[0]['url'])->body();
+//
+//            // Ensure directory exists before writing
+//            if (!file_exists(dirname($absolutePath))) {
+//                mkdir(dirname($absolutePath), 0755, true);
+//            }
+//
+//            file_put_contents($absolutePath, $imageContents);
+//
+//            $downloadedAlbums[] = $albumName;
+//            $downloaded++;
+//        }
+//
+//        $offset += $limit;
+//        $more = isset($response['next']) && $response['next'] !== null;
+//
+//    } while ($more);
+//
+//    return response()->json([
+//        'message' => 'Album covers processed and saved to storage/app/spotify/images.',
+//        'downloaded' => $downloaded,
+//        'skipped' => $skipped,
+//    ]);
+//})->name('extract');
+
 Route::get('extract', function () {
     $playlistId = '5pn8zwd2XxLLZIRyNWhdma';
 
-    Storage::makeDirectory('spotify/images');
+    $disk = Storage::disk('public'); // use the configured 'public' disk
+    $directory = 'spotify/images';
+
+    $disk->makeDirectory($directory); // make sure the folder exists
 
     $playlistData = Spotify::playlist($playlistId)->get();
-    Storage::put('spotify/playlist.json', json_encode($playlistData, JSON_PRETTY_PRINT));
+    Storage::put('spotify/playlist.json', json_encode($playlistData, JSON_PRETTY_PRINT)); // keep metadata local if needed
 
     $downloadedAlbums = [];
     $skipped = 0;
@@ -148,22 +222,15 @@ Route::get('extract', function () {
 
             $index = $offset + $i + 1;
             $slug = Str::slug("{$index}-{$albumName}-{$albumId}") . '.jpg';
-            $relativePath = "spotify/images/{$slug}";
-            $absolutePath = storage_path("app/public/{$relativePath}");
+            $path = "{$directory}/{$slug}";
 
-            if (file_exists($absolutePath)) {
+            if ($disk->exists($path)) {
                 $skipped++;
                 continue;
             }
 
             $imageContents = Http::get($images[0]['url'])->body();
-
-            // Ensure directory exists before writing
-            if (!file_exists(dirname($absolutePath))) {
-                mkdir(dirname($absolutePath), 0755, true);
-            }
-
-            file_put_contents($absolutePath, $imageContents);
+            $disk->put($path, $imageContents);
 
             $downloadedAlbums[] = $albumName;
             $downloaded++;
@@ -175,7 +242,7 @@ Route::get('extract', function () {
     } while ($more);
 
     return response()->json([
-        'message' => 'Album covers processed and saved to storage/app/spotify/images.',
+        'message' => 'Album covers processed and saved to cloud disk.',
         'downloaded' => $downloaded,
         'skipped' => $skipped,
     ]);

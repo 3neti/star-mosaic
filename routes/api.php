@@ -55,8 +55,7 @@ Route::get('images', function () {
         ->values()
         ->map(function ($file) {
             return [
-//                'cover' => url(str_replace('spotify/images/', 'images/', $file)),
-                'cover' => asset("storage/{$file}"), //
+                'cover' => Storage::disk('public')->url($file),
                 'name' => basename($file),
             ];
         });
