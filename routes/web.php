@@ -264,5 +264,110 @@ Route::get('/collage', function () {
     return Inertia::render('Collage');
 })->name('collage');
 
+//Route::get('/mosaic', function () {
+//    $disk = Storage::disk('public');
+//    $files = $disk->files('spotify/images');
+//
+//    $tileSize = 64; // pixels per tile
+//    $cols = 25;     // number of images per row
+//    $total = count($files);
+//    $rows = ceil($total / $cols);
+//
+//    $mosaic = imagecreatetruecolor($cols * $tileSize, $rows * $tileSize);
+//
+//    $x = $y = 0;
+//    foreach ($files as $file) {
+//        $contents = $disk->get($file);
+//        $image = imagecreatefromstring($contents);
+//
+//        // Resize tile to fixed size
+//        $thumb = imagecreatetruecolor($tileSize, $tileSize);
+//        imagecopyresampled($thumb, $image, 0, 0, 0, 0, $tileSize, $tileSize, imagesx($image), imagesy($image));
+//
+//        imagecopy($mosaic, $thumb, $x * $tileSize, $y * $tileSize, 0, 0, $tileSize, $tileSize);
+//        imagedestroy($thumb);
+//
+//        $x++;
+//        if ($x >= $cols) {
+//            $x = 0;
+//            $y++;
+//        }
+//    }
+//
+//    ob_start();
+//    imagejpeg($mosaic);
+//    $imageData = ob_get_clean();
+//
+//    return response($imageData)->header('Content-Type', 'image/jpeg');
+//});
+
+
+Route::get('/mosaic', function () {
+    $disk = Storage::disk('public');
+    $files = $disk->files('spotify/images');
+
+    if (empty($files)) {
+        abort(404, 'No album images found.');
+    }
+
+    $tileSize = 64; // px per tile
+    $cols = 25; // number of tiles per row
+    $rows = ceil(count($files) / $cols);
+
+    $mosaicWidth = $cols * $tileSize;
+    $mosaicHeight = $rows * $tileSize;
+    $mosaic = imagecreatetruecolor($mosaicWidth, $mosaicHeight);
+
+    // Optional: white background
+    $white = imagecolorallocate($mosaic, 255, 255, 255);
+    imagefill($mosaic, 0, 0, $white);
+
+    $x = $y = 0;
+    foreach ($files as $file) {
+        try {
+            $imageData = $disk->get($file);
+            $srcImage = imagecreatefromstring($imageData);
+            if (!$srcImage) continue;
+
+            $thumb = imagecreatetruecolor($tileSize, $tileSize);
+            imagecopyresampled(
+                $thumb,
+                $srcImage,
+                0, 0, 0, 0,
+                $tileSize, $tileSize,
+                imagesx($srcImage),
+                imagesy($srcImage)
+            );
+
+            imagecopy(
+                $mosaic,
+                $thumb,
+                $x * $tileSize,
+                $y * $tileSize,
+                0, 0, $tileSize, $tileSize
+            );
+
+            imagedestroy($srcImage);
+            imagedestroy($thumb);
+
+            $x++;
+            if ($x >= $cols) {
+                $x = 0;
+                $y++;
+            }
+        } catch (Exception $e) {
+            continue; // skip corrupt images
+        }
+    }
+
+    ob_start();
+    imagejpeg($mosaic);
+    $output = ob_get_clean();
+    imagedestroy($mosaic);
+
+    return response($output)->header('Content-Type', 'image/jpeg');
+});
+
+
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
